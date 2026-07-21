@@ -1,0 +1,6 @@
+{
+  "name": "RAB Engine",
+  "description": "Aplikasi pengubah file Rencana Anggaran Biaya (RAB) menjadi Work Breakdown Structure (WBS) secara otomatis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
