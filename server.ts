@@ -4,8 +4,12 @@ import multer from 'multer';
 import XLSX from 'xlsx';
 import { createServer as createViteServer } from 'vite';
 import { getDb, saveDb, getStats, resetDb, Proyek } from './src/server/db';
-import { validateAndProcessRab } from './src/server/rab_parser';
 import { generateTemplateExcelBuffer } from './src/server/template_generator';
+import { ImportEngine } from './src/server/engines/import_engine';
+import { ParserEngine } from './src/server/engines/parser_engine';
+import { ValidationEngine } from './src/server/engines/validation_engine';
+import { PlanningEngine } from './src/server/engines/planning_engine';
+import { DatabaseEngine } from './src/server/engines/database_engine';
 
 const app = express();
 const PORT = 3000;
@@ -125,22 +129,34 @@ app.post('/api/import', (req, res, next) => {
       });
     }
 
-    // Parse the uploaded excel file from buffer
-    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    // Parse to JSON rows
-    const rawRows = XLSX.utils.sheet_to_json(worksheet);
+    // 1. Import Engine reads Excel file buffer
+    const { rawRows, headers } = ImportEngine.readExcel(file.buffer);
 
-    // Process and validate via parser service
-    const result = validateAndProcessRab(projectName, rawRows);
+    // 2. Parser Engine maps tabular data to a standardized model
+    const { parsedRows } = ParserEngine.parse(rawRows, headers);
 
-    if (!result.success) {
-      return res.status(400).json(result);
+    // 3. Validation Engine validates business and formatting constraints
+    const validationResult = ValidationEngine.validate(projectName, parsedRows);
+    if (!validationResult.isValid) {
+      return res.status(400).json({
+        success: false,
+        errors: validationResult.errors
+      });
     }
 
-    res.json(result);
+    // 4. Planning Engine compiles standard rows into the hierarchical WBS tree
+    const wbs = PlanningEngine.buildWbs(projectName, parsedRows);
+
+    // 5. Database Engine persists the finalized structure to the storage file
+    const savedProyek = DatabaseEngine.saveWbs(wbs);
+
+    res.json({
+      success: true,
+      errors: [],
+      proyek: savedProyek,
+      divisiCount: wbs.divisions.length,
+      itemCount: wbs.divisions.reduce((sum, div) => sum + div.items.length, 0)
+    });
   } catch (error: any) {
     res.status(500).json({
       success: false,

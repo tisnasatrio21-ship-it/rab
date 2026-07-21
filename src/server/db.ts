@@ -1,5 +1,4 @@
-import fs from 'fs';
-import path from 'path';
+import { DatabaseEngine, DatabaseSchema } from './engines/database_engine';
 
 export interface Proyek {
   id: string;
@@ -38,63 +37,18 @@ export interface RabRow {
   jumlah: number;
 }
 
-interface DatabaseSchema {
-  proyek: Proyek[];
-  divisi_pekerjaan: DivisiPekerjaan[];
-  item_pekerjaan: ItemPekerjaan[];
-  rab: RabRow[];
-}
-
-const DB_FILE_PATH = path.join(process.cwd(), 'src', 'server', 'db_store.json');
-
-// Ensure database directory and file exist
-function initializeDb() {
-  const dir = path.dirname(DB_FILE_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  if (!fs.existsSync(DB_FILE_PATH)) {
-    const defaultData: DatabaseSchema = {
-      proyek: [],
-      divisi_pekerjaan: [],
-      item_pekerjaan: [],
-      rab: [],
-    };
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(defaultData, null, 2), 'utf-8');
-  }
-}
-
 export function getDb(): DatabaseSchema {
-  initializeDb();
-  try {
-    const data = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading database file:', error);
-    return { proyek: [], divisi_pekerjaan: [], item_pekerjaan: [], rab: [] };
-  }
+  return DatabaseEngine.getDb();
 }
 
 export function saveDb(data: DatabaseSchema) {
-  initializeDb();
-  try {
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (error) {
-    console.error('Error writing database file:', error);
-  }
+  DatabaseEngine.saveDb(data);
 }
 
 export function resetDb() {
-  const defaultData: DatabaseSchema = {
-    proyek: [],
-    divisi_pekerjaan: [],
-    item_pekerjaan: [],
-    rab: [],
-  };
-  saveDb(defaultData);
+  DatabaseEngine.resetDb();
 }
 
-// Stats helper
 export interface DbStats {
   namaProyek: string;
   jumlahDivisi: number;
@@ -105,46 +59,5 @@ export interface DbStats {
 }
 
 export function getStats(proyekId?: string): DbStats {
-  const db = getDb();
-  const totalProyekCount = db.proyek.length;
-  
-  if (totalProyekCount === 0) {
-    return {
-      namaProyek: 'Belum Ada Proyek',
-      jumlahDivisi: 0,
-      jumlahItem: 0,
-      tanggalImport: '-',
-      statusImport: 'Belum Ada',
-      totalProyekCount: 0,
-    };
-  }
-
-  // Use specified or last imported project
-  const targetProyek = proyekId 
-    ? db.proyek.find(p => p.id === proyekId) 
-    : db.proyek[db.proyek.length - 1];
-
-  if (!targetProyek) {
-    return {
-      namaProyek: 'Proyek Tidak Ditemukan',
-      jumlahDivisi: 0,
-      jumlahItem: 0,
-      tanggalImport: '-',
-      statusImport: 'Gagal',
-      totalProyekCount,
-    };
-  }
-
-  const divisions = db.divisi_pekerjaan.filter(d => d.proyek_id === targetProyek.id);
-  const divIds = divisions.map(d => d.id);
-  const items = db.item_pekerjaan.filter(i => divIds.includes(i.divisi_pekerjaan_id));
-
-  return {
-    namaProyek: targetProyek.nama,
-    jumlahDivisi: divisions.length,
-    jumlahItem: items.length,
-    tanggalImport: targetProyek.tanggal_import,
-    statusImport: targetProyek.status_import,
-    totalProyekCount,
-  };
+  return DatabaseEngine.getStats(proyekId);
 }
